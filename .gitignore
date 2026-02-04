@@ -1,0 +1,57 @@
+# ===== Python 基础 =====
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ===== 虚拟环境 =====
+env/
+venv/
+.venv/
+yf/                
+miniconda3/
+anaconda3/
+
+# ===== Jupyter =====
+.ipynb_checkpoints
+
+# ===== VSCode / IDE =====
+.vscode/
+.idea/
+
+# ===== 日志文件 =====
+*.log
+
+# ===== 训练生成的模型权重 =====
+*.pth
+*.pt
+*.ckpt
+saved_model/
+checkpoints/
+
+# ===== 实验输出 / 结果 =====
+runs/
+outputs/
+logs/
+tensorboard/
+
+# ===== 数据集 =====
+data/
+datasets/
+CUB_200_2011/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== 临时文件 =====
+*.swp
+*.tmp
+*.bak
+
+Dassl.pytorch-master/
+Dassl.pytorch-master.zip
