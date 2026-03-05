@@ -24,7 +24,7 @@ def train(args):
 def _train(args):
 
     init_cls = args["init_cls"]
-    logs_name = "logs/{}/{}/{}/{}_{}/{}".format("sec_tr",args["dataset"],args['tuned_epoch'], args['init_lr'], args["kshot"], args["beta"])
+    logs_name = "logs/{}/{}/{}/{}_{}/{}/{}/{}/{}/{}/{}".format("sec_tr",args["dataset"],args['tuned_epoch'], args['init_lr'], args["kshot"], args["beta"], args["avg_alpha"], args["perturb_var"], args["anchor_lambda"], args["kl_weight"], args["EMA_beta"])
     saved_path = "saved_model/{}/{}/{}_{}/{}_{}".format("sec_tr", args["dataset"], args['tuned_epoch'], args['init_lr'], args["prompt_token_num"],args["prompt_pool_num"])
 
     if not os.path.exists(logs_name):
@@ -32,15 +32,21 @@ def _train(args):
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
 
-    logfilename = "logs/{}/{}/{}/{}_{}/{}/{}_{}".format(
+    logfilename = "logs/{}/{}/{}/{}_{}/{}/{}/{}/{}/{}/{}/{}_{}_{}".format(
         "sec_tr",
         args["dataset"],
         args['tuned_epoch'],
         args["init_lr"],
         args["kshot"],
         args["beta"],
+        args["avg_alpha"], 
+        args["perturb_var"], 
+        args["anchor_lambda"], 
+        args["kl_weight"], 
+        args["EMA_beta"],
         args["prompt_token_num"],
-        args["prompt_pool_num"]
+        args["prompt_pool_num"],
+        args["method"]
     )
     logging.basicConfig(
         level=logging.INFO,

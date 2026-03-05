@@ -28,6 +28,13 @@
     "base_model_path": "sec",
     "prefix": "sec",
     "model_prefix": "sec",
-    "beta": 0.5
+    "beta": 0.5,
+
+    "avg_alpha": 0.5,
+    "perturb_var": 0.01,
+    "anchor_lambda": 0.5,
+    "EMA_beta": 0.3,
+
+    "method": "merge"
 }
 

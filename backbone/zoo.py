@@ -7,6 +7,7 @@ from torch.autograd import Variable
 import numpy as np
 import copy
 from SupConLoss import SupConLoss, CenterLoss, prompt_con_loss, prompt_centloss
+import logging
 
 
 def tensor_prompt(a, b, c=None, ortho=False, grad=True):
@@ -311,7 +312,9 @@ class NDPrompt(nn.Module):
         # prompt basic param
         self.e_pool_size = int(e_pool_size)
         self.e_p_length = int(e_p_length)
-        self.e_layers = [1, 2, 3, 4, 5]
+        
+        # 数量等于blocks数量12，详见VPT_ViT类的定义depth=12
+        self.e_layers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] 
 
         # strenth of ortho penalty
         self.ortho_mu = ortho_mu
@@ -410,6 +413,8 @@ class NDPrompt(nn.Module):
             A = getattr(self, f'e_a_{l}')
             p = getattr(self, f'e_p_{l}')
 
+
+            # logging.info("K: {}".format(K[:5]))
             # with attention and cosine sim
             # (b x 1 x d) * soft([1 x k x d]) = (b x k x d) -> attention = k x d
             a_querry = torch.einsum('bd,kd->bkd', x_querry, A)
