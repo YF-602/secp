@@ -7,6 +7,7 @@
     "init_cls": 100,
     "increment": 10,
     "kshot": 5,
+
     "vpt_type":"Deep",
     "tuned_epoch":30,
     "fs_epoch": 0,
@@ -24,14 +25,14 @@
     "base_model_path": "sec",
     "prefix": "sec",
     "model_prefix": "sec",
-    "beta": 0.5,
 
-    "avg_alpha": 0.5,
-    "perturb_var": 0.01,
-    "anchor_lambda": 0.5,
+    "perturb_var": 1,
+    "beta_TIPall": 0.8,
+    "EMA_beta": 0.99,
+    "avg_alpha": 0.8,
+
     "kl_weight": 0.001,
-    "EMA_beta": 0.3,
-
-    "method": "merge"
+    "anchor_lambda": 0.1,
+    "method_id": "use_tspasp_to_generate_x_query"
 }
 

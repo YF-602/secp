@@ -82,6 +82,7 @@ class Learner(BaseLearner):
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)
         self._network.update_fc(self._total_classes)
+        self._network.backbone.TSP_sec.process_task_count(self._total_classes)
         self._network.backbone.TIP.process_task_count()
         logging.info("Learning on {}-{}".format(self._known_classes, self._total_classes))
 

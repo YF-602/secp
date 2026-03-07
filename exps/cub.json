@@ -34,6 +34,6 @@
 
     "kl_weight": 0.001,
     "anchor_lambda": 0.1,
-    "method_id": "freeze_tipall_increment"
+    "method_id": "use_tspasp_to_generate_x_query"
 }
 

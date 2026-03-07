@@ -91,6 +91,12 @@ class VPT_ViT(VisionTransformer):
                 round(args["init_cls"] * self.args["prompt_pool_num"]), 
                 Prompt_Token_num / 2
             )
+            self.TSP_sec = DPrompt(
+                args, 
+                embed_dim, 
+                args["nb_tasks"] - 1,
+                Prompt_Token_num / 2
+            )
             self.register_buffer("TIPall",torch.zeros(depth, int(Prompt_Token_num/2), embed_dim))
             self.Avg_TSP = torch.zeros(depth, int(Prompt_Token_num/2), embed_dim)  
             self.Prompt_Encoder = PROMPT_Encoder(
@@ -99,6 +105,12 @@ class VPT_ViT(VisionTransformer):
                 prompt_length=int(Prompt_Token_num/2), 
                 prompt_featuers=embed_dim
             )
+            self.cross_attn = torch.nn.MultiheadAttention(
+                embed_dim=embed_dim,
+                num_heads=8,
+                batch_first=True
+            )
+            self.gate = torch.nn.Parameter(torch.ones(embed_dim) * 0.1)
 
         else:  # "Shallow"
             print("Using Shallow Prompt")
@@ -106,6 +118,11 @@ class VPT_ViT(VisionTransformer):
                 embed_dim, 
                 1, 
                 20, 
+                Prompt_Token_num / 2
+            )
+            self.TSP_sec = DPrompt(
+                embed_dim,
+                num_classes / 2,
                 Prompt_Token_num / 2
             )
             self.register_buffer("TIPall",torch.zeros(1, int(Prompt_Token_num/2), embed_dim))
@@ -134,6 +151,11 @@ class VPT_ViT(VisionTransformer):
                 param.requires_grad = True
             for param in self.TIP.parameters():
                 param.requires_grad = True
+            for param in self.TSP_sec.parameters():
+                param.requires_grad = True
+            for param in self.cross_attn.parameters():
+                param.requires_grad = True
+            self.gate.requires_grad = True
         except:
             pass
 
@@ -147,6 +169,11 @@ class VPT_ViT(VisionTransformer):
                 param.requires_grad = True
             for param in self.Prompt_Encoder.fc_std.parameters():
                 param.requires_grad = True
+            for param in self.TSP_sec.parameters():
+                param.requires_grad = True
+            for param in self.cross_attn.parameters():
+                param.requires_grad = True
+            self.gate.requires_grad = True
         except:
             pass
 
@@ -202,7 +229,18 @@ class VPT_ViT(VisionTransformer):
                 TSP = self.args["avg_alpha"] * self.Avg_TSP[i].expand(x.shape[0], -1, -1).to(x.device) + \
                     (1-self.args["avg_alpha"]) * tsp[:,i,:,:]
                 
-                Prompt_Tokens = torch.cat([TIP, TSP], dim=1)
+                q = x_query.unsqueeze(1)     # (bs,1,D)
+
+                attn_out, _ = self.cross_attn(q, TSP, TSP)
+
+                x_query = x_query + self.gate * attn_out.squeeze(1)
+
+                if not torch.isfinite(x_query).all():
+                    print("x_query contains NaN or Inf")
+
+                TSP_sec = self.TSP_sec.forward(x_query, i)
+                
+                Prompt_Tokens = torch.cat([TIP, TSP_sec], dim=1)
                 x = torch.cat([x, Prompt_Tokens], dim=1)
                 x = self.blocks[i](x)[:, :num_tokens]   
         else:  # self.VPT_type == "Shallow"
