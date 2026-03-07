@@ -24,29 +24,55 @@ def train(args):
 def _train(args):
 
     init_cls = args["init_cls"]
-    logs_name = "logs/{}/{}/{}/{}_{}/{}/{}/{}/{}/{}/{}".format("sec_tr",args["dataset"],args['tuned_epoch'], args['init_lr'], args["kshot"], args["beta"], args["avg_alpha"], args["perturb_var"], args["anchor_lambda"], args["kl_weight"], args["EMA_beta"])
-    saved_path = "saved_model/{}/{}/{}_{}/{}_{}".format("sec_tr", args["dataset"], args['tuned_epoch'], args['init_lr'], args["prompt_token_num"],args["prompt_pool_num"])
+    logs_name = "logs/{}/{}/{}/{}_{}/{}_{}".format(
+        # 基础参数
+        args["model_name"],
+        args["dataset"],
+        args["kshot"],
+
+        args['tuned_epoch'],
+        args["init_lr"],
+
+        args["prompt_token_num"],
+        args["prompt_pool_num"],
+    )
+    saved_path = "saved_model/{}/{}/{}_{}/{}_{}".format(
+        args["model_name"], 
+        args["dataset"], 
+
+        args['tuned_epoch'], 
+        args['init_lr'], 
+
+        args["prompt_token_num"],
+        args["prompt_pool_num"]
+    )
 
     if not os.path.exists(logs_name):
         os.makedirs(logs_name)
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
 
-    logfilename = "logs/{}/{}/{}/{}_{}/{}/{}/{}/{}/{}/{}/{}_{}_{}".format(
-        "sec_tr",
+    logfilename = "logs/{}/{}/{}/{}_{}/{}_{}/hyper_{}_{}_{}_{}_{}_{}".format(
+        # 基础参数
+        args["model_name"],
         args["dataset"],
+        args["kshot"],
+
         args['tuned_epoch'],
         args["init_lr"],
-        args["kshot"],
-        args["beta"],
-        args["avg_alpha"], 
-        args["perturb_var"], 
-        args["anchor_lambda"], 
-        args["kl_weight"], 
-        args["EMA_beta"],
+
         args["prompt_token_num"],
         args["prompt_pool_num"],
-        args["method"]
+        
+        # 其他参数
+        args["perturb_var"], 
+        args["EMA_beta"],
+        args["avg_alpha"], 
+
+        # 权重参数
+        args["kl_weight"], 
+        args["anchor_lambda"], 
+        args["method_id"]
     )
     logging.basicConfig(
         level=logging.INFO,
@@ -57,17 +83,21 @@ def _train(args):
         ],
     )
 
-    args["base_model_path"] = "saved_model/{}/{}/{}_{}/{}_{}/{}_{}_{}_{}.pth".format(
-        "sec_tr",
+    args["base_model_path"] = "saved_model/{}/{}/{}_{}/{}_{}/{}_{}_{}_{}_{}.pth".format(
+        args["model_name"],
         args["dataset"],
+
         args['tuned_epoch'],
         args["init_lr"],
+
         args["prompt_token_num"],
         args["prompt_pool_num"],
+        
         args["model_prefix"],
         args["tuned_epoch"],
         args["seed"],
         args["batch_size"],
+        args["method_id"]
     )
 
 

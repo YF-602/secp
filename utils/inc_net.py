@@ -23,7 +23,13 @@ def get_backbone(args, pretrained=False):
                 VPT_type = "Shallow"
             Prompt_Token_num = args["prompt_token_num"]
 
-            model = build_promptmodel(modelname=basicmodelname, Prompt_Token_num=Prompt_Token_num, VPT_type=VPT_type, args=args)
+            model = build_promptmodel(
+                modelname=basicmodelname, 
+                Prompt_Token_num=Prompt_Token_num, 
+                VPT_type=VPT_type, 
+                args=args
+            )
+            
             prompt_state_dict = model.obtain_prompt()
             model.load_prompt(prompt_state_dict)
 
@@ -49,10 +55,6 @@ class BaseNet(nn.Module):
         self.fc = None
         self._device = args["device"][0]
 
-        if 'resnet' in args['backbone_type']:
-            self.model_type = 'cnn'
-        else:
-            self.model_type = 'vit'
         self.model_type = 'vit'   
 
     @property

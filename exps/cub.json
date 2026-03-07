@@ -1,7 +1,7 @@
 {
     "model_name": "sec",
     "backbone_type": "pretrained_vit_b16_224_vpt",
-    "device": ["2"],
+    "device": ["3"],
     "seed": [42],
     "dataset": "cub",
     "init_cls": 100,
@@ -20,21 +20,20 @@
     "min_lr":0,
     "optimizer":"sgd",
     
-
     "fixed_memory": false,
     "shuffle": false,
     "top_k": 5,
     "base_model_path": "sec",
     "prefix": "sec",
     "model_prefix": "sec",
-    "beta": 0.5,
 
-    "avg_alpha": 0.5,
-    "perturb_var": 0.01,
-    "anchor_lambda": 0.5,
+    "perturb_var": 1,
+    "beta_TIPall": 0.8,
+    "EMA_beta": 0.99,
+    "avg_alpha": 0.8,
+
     "kl_weight": 0.001,
-    "EMA_beta": 0.3,
-
-    "method": "merge"
+    "anchor_lambda": 0.1,
+    "method_id": "debug3"
 }
 

@@ -78,38 +78,35 @@ class Learner(BaseLearner):
 
 
     def incremental_train(self, data_manager):
+        self.data_manager = data_manager
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)
-        # print(self._total_classes)
         self._network.update_fc(self._total_classes)
-        # self._network.backbone.TSP.process_task_count(self._total_classes)
-        self._network.backbone.RSP.process_task_count()
+        self._network.backbone.TIP.process_task_count()
         logging.info("Learning on {}-{}".format(self._known_classes, self._total_classes))
 
         if isinstance(self.args['kshot'], int) and self._known_classes > 0:
             train_bs = self.args['fs_batch_size']
         else:
             train_bs = self.batch_size
+        # 训练集
         train_dataset = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source="train",
                                                  mode="train", kshot=self.args["kshot"])
         self.train_dataset = train_dataset
-
         self.train_loader = DataLoader(train_dataset, batch_size=train_bs, shuffle=True, num_workers=num_workers)
-
-        self.data_manager = data_manager
-
+        # 用于构造原型的训练集
+        train_dataset_for_protonet = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes),
+                                                              source="train", mode="test", kshot=self.args["kshot"])
+        self.train_loader_for_protonet = DataLoader(train_dataset_for_protonet, batch_size=int(self.batch_size / 2),
+                                                    shuffle=False, num_workers=num_workers)
+        # 测试集
         test_dataset = data_manager.get_dataset(np.arange(0, self._total_classes), source="test", mode="test")
         self.test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers)
         test_curr_dataset = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes), source="test",
                                                      mode="test")
         self.test_curr_loader = DataLoader(test_curr_dataset, batch_size=self.batch_size, shuffle=False,
                                            num_workers=num_workers)
-        train_dataset_for_protonet = data_manager.get_dataset(np.arange(self._known_classes, self._total_classes),
-                                                              source="train", mode="test", kshot=self.args["kshot"])
-
-        self.train_loader_for_protonet = DataLoader(train_dataset_for_protonet, batch_size=int(self.batch_size / 2),
-                                                    shuffle=False, num_workers=num_workers)
-
+        
         logging.info("training set size: {}, fc construct set size: {}".format(len(train_dataset),
                                                                                len(train_dataset_for_protonet)))
 
@@ -142,13 +139,8 @@ class Learner(BaseLearner):
                 '================= load base model from: {} ================='.format(self.args["base_model_path"]))
             print(self._cur_task)
             self._network.load_state_dict(torch.load(self.args["base_model_path"]))
-            # self.replace_midfeature(train_loader_for_protonet, self._network, None)
-            # self.replace_fc(train_loader_for_protonet, self._network, None)
 
         else:
-            # if self._cur_task > 0:
-                # self.replace_fc(train_loader_for_protonet, self._network, None)
-
             if self._cur_task == 0:
                 if self.args['optimizer'] == 'sgd':
                     optimizer = optim.SGD(self._network.parameters(), momentum=0.9, lr=self.init_lr,
@@ -176,14 +168,11 @@ class Learner(BaseLearner):
                 self.update_ema_prompt(train_loader_for_protonet)
 
             self.replace_fc(train_loader_for_protonet, self._network, None)
-            # self.replace_midfeature(train_loader_for_protonet, self._network, None)
             if self._cur_task == 0:
                 torch.save(self._network.state_dict(), self.args["base_model_path"])
 
     def eval_task(self):
         y_pred, y_true = self._eval_acc(self.test_loader)
-        # logging.info("y_pred shape: {}, y_true shape: {}".format(y_pred.shape, y_true.shape))
-        # logging.info("y_pred: {}, y_true: {}".format(y_pred[:10], y_true[:10]))
         accy = self._evaluate(y_pred, y_true)
         return accy
 
@@ -198,8 +187,8 @@ class Learner(BaseLearner):
                 out = self._network(inputs)
                 outputs = out["logits"]
 
-                # logging.info("outputs: {}".format(outputs[:5]))
-                
+                # logging.info('outputs: {}'.format(outputs.cpu().numpy()))
+
                 embedding = out["features"]
             predicts = torch.topk(outputs, k=self.topk, dim=1, largest=True, sorted=True)[1]  # [bs, topk]
             y_pred.append(predicts.cpu().numpy())
@@ -230,61 +219,39 @@ class Learner(BaseLearner):
             self._network.train()
             for i, (_, inputs, targets) in enumerate(train_loader):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
-                # print(inputs.shape)
                 if self._cur_task == 0:
-
-                    # cur_class = set(targets.cpu())
-                    # for c in cur_class:
-                    #     inputs = torch.cat([inputs, anchor_samples[c].unsqueeze(0).to(self._device)])
-                    #     targets = torch.cat([targets, torch.tensor(c).to(self._device)])
-
                     cur_class = set(targets.cpu().tolist())
 
                     new_inputs = []
-                    new_targets = []
-
                     for c in cur_class:
                         new_inputs.append(anchor_samples[c].unsqueeze(0))
-                        new_targets.append(torch.tensor([c]))
-
                     if len(new_inputs) > 0:
                         inputs = torch.cat([inputs] + [t.to(self._device) for t in new_inputs])
-                        targets = torch.cat([targets] + [t.to(self._device) for t in new_targets])
                     
-                    # out = self._network(inputs, targets=targets, perturb_var=self.args["perturb_var"])
                     # out包含anchor样本的输出
-                    out = self._network(inputs, targets=targets, perturb_var=self.args["perturb_var"], cur_class=cur_class)
-                    # logits = out["logits"]
+                    out = self._network(inputs, perturb_var=self.args["perturb_var"])
                     logits = out["logits"][:-len(cur_class),:]
                     features = out["features"]
-                    # (mu, std) = out["kl"]
                     kl = out["kl"]
-                    loss_pc = out['loss_match']
                     sim_loss = 0.0
                     cos = nn.CosineSimilarity(dim=1, eps=1e-6)
                     anchor_id = 0
                     for c in cur_class:
-                        fea_c = features[:-len(cur_class)][targets[:-len(cur_class)]==c]
-                        fea_anchor = features[len(cur_class):][anchor_id].detach()
+                        fea_c = features[:-len(cur_class)][targets==c]
+                        fea_anchor = features[-len(cur_class):][anchor_id].detach()
                         fea_anchor = fea_anchor.unsqueeze(0).repeat(len(fea_c), 1)
                         sim_loss += (1-cos(fea_c, fea_anchor)).mean()
                         anchor_id += 1
                     sim_loss = sim_loss / len(cur_class)
-
-                    # KL = 0.5 * torch.sum(mu.pow(2) + std.pow(2) - 2*std.log() - 1) / mu.size(0)
                     
-                    loss = F.cross_entropy(logits, targets[:-len(cur_class)]) + \
-                        loss_pc * self.args["beta"] + \
-                        self.args["anchor_lambda"] * sim_loss + \
-                        self.args["kl_weight"] * kl
-
+                    loss = F.cross_entropy(logits, targets) + \
+                        self.args["kl_weight"] * kl + \
+                        self.args["anchor_lambda"] * sim_loss
+                        
+                    
                 else:
-
-                    out = self._network(inputs, train=True, targets=targets, perturb_var=self.args["perturb_var"])
-                    logits = out["logits"]
-                    loss_pc = out['loss_match']
-                    targets = targets.repeat(int(logits.shape[0] / targets.shape[0]))
-                    loss = F.cross_entropy(logits, targets) + loss_pc * self.args["beta"]
+                    logits = self._network(inputs, perturb_var=self.args["perturb_var"])["logits"]
+                    loss = F.cross_entropy(logits, targets)
                     # print(loss_pc)
                 optimizer.zero_grad()
                 loss.backward()
@@ -301,18 +268,11 @@ class Learner(BaseLearner):
             for i, batch in enumerate(train_loader):
                 (_,data,label)=batch
                 data=data.to(self._device)
-                label=label.to(self._device)
-                prompts = []
-
-                # 因为data每次均相同，所以提取一次即可
                 fea_data = self._network.backbone.Prompt_Encoder.prompt_backbone(data)
+                label=label.to(self._device)
 
-                for l in range(len(self._network.backbone.blocks)):
-                    prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIP, i=l, perturb_var=0)
-                    prompts.append(prompt.unsqueeze(1))
-
-                prompts = torch.cat(prompts, dim=1)
-                prompt_list.append(prompts.detach().cpu())
+                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIPall, perturb_var=0)
+                prompt_list.append(prompt.detach().cpu())
 
         if mode == 'new':
             self._network.backbone.Avg_TSP = self.args["EMA_beta"]*self._network.backbone.Avg_TSP + (1-self.args["EMA_beta"])*torch.mean(torch.cat(prompt_list, dim=0), dim=0) 
@@ -324,7 +284,6 @@ class Learner(BaseLearner):
 
 
     def find_anchor_sample(self, model, train_loader):
-        # train_loader must be Shuffle == False.
 
         model.eval()
         embedding_list = []
@@ -334,22 +293,14 @@ class Learner(BaseLearner):
             for i, batch in enumerate(train_loader):
                 (_,data,label)=batch
                 data=data.to(self._device)
+                fea_data = self._network.backbone.Prompt_Encoder.prompt_backbone(data)
                 label=label.to(self._device)
                 embedding = model(data)['features']
                 embedding_list.append(embedding.cpu())
                 label_list.append(label.cpu())
 
-                prompts = []
-
-                # 因为data每次均相同，所以提取一次即可
-                fea_data = self._network.backbone.Prompt_Encoder.prompt_backbone(data)
-
-                for l in range(len(self._network.backbone.blocks)):
-                    prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIP, i=l, perturb_var=0)
-                    prompts.append(prompt.unsqueeze(1))
-
-                prompts = torch.cat(prompts, dim=1)
-                prompt_list.append(prompts.detach().cpu())
+                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIPall, perturb_var=0)
+                prompt_list.append(prompt.detach().cpu())
 
         embedding_list = torch.cat(embedding_list, dim=0)
         label_list = torch.cat(label_list, dim=0)
