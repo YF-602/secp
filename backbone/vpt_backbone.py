@@ -156,7 +156,7 @@ class VPT_ViT(VisionTransformer):
     def load_prompt(self, prompt_state_dict):
         pass
 
-    def forward_features(self,x,perturb_var=0):
+    def forward_features(self,x,perturb_var=0,update_TIPall=False):
         x_raw = x
         fea_x = self.Prompt_Encoder.prompt_backbone(x_raw)
 
@@ -192,7 +192,10 @@ class VPT_ViT(VisionTransformer):
 
                 # logging.info('TIP: {}'.format(TIP.cpu().detach().numpy()))
 
-                self.TIPall[i] = self.args["beta_TIPall"] * self.TIPall[i] + (1-self.args["beta_TIPall"]) * TIP.mean(0).detach()
+                # 只在base阶段更新TIPall
+                if update_TIPall:
+                    self.TIPall[i] = self.args["beta_TIPall"] * self.TIPall[i] + \
+                                    (1-self.args["beta_TIPall"]) * TIP.mean(0).detach()
 
                 # logging.info('TIPall: {}'.format(self.TIPall[i].cpu().detach().numpy()))
 
@@ -208,8 +211,8 @@ class VPT_ViT(VisionTransformer):
         x = self.norm(x)
         return x, kl
 
-    def forward(self, x, perturb_var=0):
-        x, kl = self.forward_features(x, perturb_var)
+    def forward(self, x, perturb_var=0, update_TIPall=False):
+        x, kl = self.forward_features(x, perturb_var=perturb_var, update_TIPall=update_TIPall)
         x = x[:, 0, :]
         return x, kl
 
@@ -241,8 +244,8 @@ class SimpleVitNet(BaseNet):
         x, kl=self.backbone(x)
         return x
 
-    def forward(self, x, perturb_var=0):
-        x, kl = self.backbone(x, perturb_var=perturb_var)
+    def forward(self, x, perturb_var=0, update_TIPall=False):
+        x, kl = self.backbone(x, perturb_var=perturb_var, update_TIPall=update_TIPall)
 
         # logging.info("x: {}".format(x.cpu().detach().numpy()))
 

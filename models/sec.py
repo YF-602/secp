@@ -149,7 +149,7 @@ class Learner(BaseLearner):
                     optimizer = optim.AdamW(self._network.parameters(), lr=self.init_lr, weight_decay=self.weight_decay)
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args['tuned_epoch'],
                                                                  eta_min=self.min_lr)
-                self._init_train(train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler)
+                self._init_train(train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_TIPall=True)
 
                 # add EMA update for prompt
                 self.update_ema_prompt(train_loader_for_protonet, mode='base')
@@ -204,7 +204,7 @@ class Learner(BaseLearner):
         return y_pred, y_true  # [N, topk]
 
     # naive train
-    def _init_train(self, train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler):
+    def _init_train(self, train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_TIPall=False):
         if isinstance(self.args['kshot'], int) and self._known_classes > 0:
             total_epoch = self.args['fs_epoch']
         else:
@@ -229,7 +229,7 @@ class Learner(BaseLearner):
                         inputs = torch.cat([inputs] + [t.to(self._device) for t in new_inputs])
                     
                     # out包含anchor样本的输出
-                    out = self._network(inputs, perturb_var=self.args["perturb_var"])
+                    out = self._network(inputs, perturb_var=self.args["perturb_var"], update_TIPall=update_TIPall)
                     logits = out["logits"][:-len(cur_class),:]
                     features = out["features"]
                     kl = out["kl"]
