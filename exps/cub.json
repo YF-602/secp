@@ -33,6 +33,6 @@
 
     "kl_weight": 0.001,
     "anchor_lambda": 0.1,
-    "method_id": "add_learnable_beta_TIPall"
+    "method_id": "gsecp"
 }
 

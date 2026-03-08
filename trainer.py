@@ -83,7 +83,7 @@ def _train(args):
         ],
     )
 
-    args["base_model_path"] = "saved_model/{}/{}/{}_{}/{}_{}/{}_{}_{}_{}_{}.pth".format(
+    args["base_model_path"] = "saved_model/{}/{}/{}_{}/{}_{}/{}_{}_{}_{}_{}_{}_{}.pth".format(
         args["model_name"],
         args["dataset"],
 
@@ -93,10 +93,15 @@ def _train(args):
         args["prompt_token_num"],
         args["prompt_pool_num"],
         
-        args["model_prefix"],
-        args["tuned_epoch"],
         args["seed"],
-        args["batch_size"],
+        # 其他参数
+        args["perturb_var"], 
+        args["EMA_beta"],
+        args["avg_alpha"], 
+
+        # 权重参数
+        args["kl_weight"], 
+        args["anchor_lambda"], 
         args["method_id"]
     )
 

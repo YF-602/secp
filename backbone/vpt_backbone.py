@@ -110,7 +110,7 @@ class VPT_ViT(VisionTransformer):
                 num_heads=8,
                 batch_first=True
             )
-            self.gate = torch.nn.Parameter(torch.ones(embed_dim) * 0.1)
+            self.gate = torch.nn.Parameter(torch.ones(depth) * 0.1)
             self.beta_TIPall = nn.Parameter(
                 torch.ones(depth) * torch.log(torch.tensor(0.8/(1-0.8)))
             )
@@ -215,7 +215,7 @@ class VPT_ViT(VisionTransformer):
                     (1-self.args["avg_alpha"]) * tsp[:,i,:,:]
                 q = x_query.unsqueeze(1)     # (bs,1,D)
                 attn_out, _ = self.cross_attn(q, TSP, TSP)
-                x_query = x_query + self.gate * attn_out.squeeze(1)
+                x_query = x_query + self.gate[i] * attn_out.squeeze(1)
                 if not torch.isfinite(x_query).all():
                     print("x_query contains NaN or Inf")
                 TSP_sec = self.TSP_sec.forward(x_query, i)
