@@ -28,12 +28,11 @@
     "model_prefix": "sec",
 
     "perturb_var": 1,
-    "beta_TIPall": 0.8,
     "EMA_beta": 0.99,
     "avg_alpha": 0.8,
 
     "kl_weight": 0.001,
     "anchor_lambda": 0.1,
-    "method_id": "use_tspasp_to_generate_x_query"
+    "method_id": "add_learnable_beta_TIPall"
 }
 

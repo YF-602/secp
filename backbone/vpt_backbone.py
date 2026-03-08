@@ -111,6 +111,9 @@ class VPT_ViT(VisionTransformer):
                 batch_first=True
             )
             self.gate = torch.nn.Parameter(torch.ones(embed_dim) * 0.1)
+            self.beta_TIPall = nn.Parameter(
+                torch.ones(depth) * torch.log(torch.tensor(0.8/(1-0.8)))
+            )
 
         else:  # "Shallow"
             print("Using Shallow Prompt")
@@ -156,6 +159,7 @@ class VPT_ViT(VisionTransformer):
             for param in self.cross_attn.parameters():
                 param.requires_grad = True
             self.gate.requires_grad = True
+            self.beta_TIPall.requires_grad = True
         except:
             pass
 
@@ -185,59 +189,35 @@ class VPT_ViT(VisionTransformer):
 
     def forward_features(self,x,perturb_var=0,update_TIPall=False):
         x_raw = x
-        fea_x = self.Prompt_Encoder.prompt_backbone(x_raw)
 
+        fea_x = self.Prompt_Encoder.prompt_backbone(x_raw)
         tsp, kl = self.Prompt_Encoder(fea_x, self.TIPall, perturb_var) 
 
-        # logging.info('x_raw: {}'.format(x_raw.cpu().detach().numpy()))
-
         x = self.patch_embed(x)
-
-        # logging.info('x after patch_embed: {}'.format(x.cpu().detach().numpy()))
-
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)
-
-        # logging.info('cls_token: {}'.format(cls_token.cpu().detach().numpy()))
-
         x = torch.cat((cls_token, x), dim=1)
-
-        # logging.info('x after adding cls_token: {}'.format(x.cpu().detach().numpy()))
-
         x = self.pos_drop(x + self.pos_embed)
 
         num_tokens = x.shape[1]
 
-        # logging.info('x after adding pos_embed and pos_drop: {}'.format(x.cpu().detach().numpy()))
-
         if self.VPT_type == "Deep":
             for i in range(len(self.blocks)):
                 x_query = x[:, 0, :]
-
-                # logging.info('x_query: {}'.format(x_query.cpu().detach().numpy()))
-
                 TIP = self.TIP.forward(x_query, i)
-
-                # logging.info('TIP: {}'.format(TIP.cpu().detach().numpy()))
 
                 # 只在base阶段更新TIPall
                 if update_TIPall:
-                    self.TIPall[i] = self.args["beta_TIPall"] * self.TIPall[i] + \
-                                    (1-self.args["beta_TIPall"]) * TIP.mean(0).detach()
-
-                # logging.info('TIPall: {}'.format(self.TIPall[i].cpu().detach().numpy()))
+                    beta_TIPall = torch.sigmoid(self.beta_TIPall[i])
+                    self.TIPall[i] = beta_TIPall * self.TIPall[i] + \
+                                    (1-beta_TIPall) * TIP.mean(0).detach()
 
                 TSP = self.args["avg_alpha"] * self.Avg_TSP[i].expand(x.shape[0], -1, -1).to(x.device) + \
                     (1-self.args["avg_alpha"]) * tsp[:,i,:,:]
-                
                 q = x_query.unsqueeze(1)     # (bs,1,D)
-
                 attn_out, _ = self.cross_attn(q, TSP, TSP)
-
                 x_query = x_query + self.gate * attn_out.squeeze(1)
-
                 if not torch.isfinite(x_query).all():
                     print("x_query contains NaN or Inf")
-
                 TSP_sec = self.TSP_sec.forward(x_query, i)
                 
                 Prompt_Tokens = torch.cat([TIP, TSP_sec], dim=1)
@@ -284,8 +264,6 @@ class SimpleVitNet(BaseNet):
 
     def forward(self, x, perturb_var=0, update_TIPall=False):
         x, kl = self.backbone(x, perturb_var=perturb_var, update_TIPall=update_TIPall)
-
-        # logging.info("x: {}".format(x.cpu().detach().numpy()))
 
         out = self.fc(x)
         out.update({"features": x})

@@ -229,10 +229,6 @@ class NDPrompt(nn.Module):
             setattr(self, f'e_k_{e}', k)
             setattr(self, f'e_a_{e}', a)
 
-            # print(f'Initialized e_p_{e} with {p}')
-            # print(f'Initialized e_k_{e} with {k}')
-            # print(f'Initialized e_a_{e} with {a}')
-
     def _init_smart(self, e_pool_size, e_p_length):
 
         # prompt basic param
@@ -319,18 +315,8 @@ class NDPrompt(nn.Module):
 
             if torch.isnan(K).any() or torch.isnan(A).any() or torch.isnan(p).any():
                 logging.warning(f"NDPrompt NaN detected in K, A, or p for layer {l}")
-            # print("A has nan:", torch.isnan(A).any())
-            # print("K has nan:", torch.isnan(K).any())
-            # print("p has nan:", torch.isnan(p).any())
-
-            # print("A nan rows:", torch.isnan(A).any(dim=1).nonzero())
-            # print("K nan rows:", torch.isnan(K).any(dim=1).nonzero())
-
-            # logging.info("x_querry: {}".format(x_querry.cpu().detach().numpy()))
 
             a_querry = torch.einsum('bd,kd->bkd', x_querry, A)
-
-            # logging.info("a_querry: {}".format(a_querry.cpu().detach().numpy()))
 
             n_K = nn.functional.normalize(K, dim=1)
             q = nn.functional.normalize(a_querry, dim=2)
@@ -338,7 +324,6 @@ class NDPrompt(nn.Module):
             aq_k = F.relu(-aq_k)
             P_ = torch.einsum('bk,kld->bld', aq_k, p)
 
-            # logging.info("P_: {}".format(P_.cpu().detach().numpy()))
         else:
             P_ = None
 
