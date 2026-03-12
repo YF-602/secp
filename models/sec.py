@@ -82,7 +82,7 @@ class Learner(BaseLearner):
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(self._cur_task)
         self._network.update_fc(self._total_classes)
-        self._network.backbone.TSP_sec.process_task_count(self._total_classes)
+        self._network.backbone.TSP.process_task_count(self._total_classes)
         self._network.backbone.TIP.process_task_count()
         logging.info("Learning on {}-{}".format(self._known_classes, self._total_classes))
 
@@ -150,7 +150,7 @@ class Learner(BaseLearner):
                     optimizer = optim.AdamW(self._network.parameters(), lr=self.init_lr, weight_decay=self.weight_decay)
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args['tuned_epoch'],
                                                                  eta_min=self.min_lr)
-                self._init_train(train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_TIPall=True)
+                self._init_train(train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_SIP=True)
 
                 # add EMA update for prompt
                 self.update_ema_prompt(train_loader_for_protonet, mode='base')
@@ -205,7 +205,7 @@ class Learner(BaseLearner):
         return y_pred, y_true  # [N, topk]
 
     # naive train
-    def _init_train(self, train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_TIPall=False):
+    def _init_train(self, train_loader, test_loader, train_loader_for_protonet, optimizer, scheduler, update_SIP=False):
         if isinstance(self.args['kshot'], int) and self._known_classes > 0:
             total_epoch = self.args['fs_epoch']
         else:
@@ -230,7 +230,7 @@ class Learner(BaseLearner):
                         inputs = torch.cat([inputs] + [t.to(self._device) for t in new_inputs])
                     
                     # out包含anchor样本的输出
-                    out = self._network(inputs, perturb_var=self.args["perturb_var"], update_TIPall=update_TIPall)
+                    out = self._network(inputs, perturb_var=self.args["perturb_var"], update_SIP=update_SIP)
                     logits = out["logits"][:-len(cur_class),:]
                     features = out["features"]
                     kl = out["kl"]
@@ -272,16 +272,15 @@ class Learner(BaseLearner):
                 fea_data = self._network.backbone.Prompt_Encoder.prompt_backbone(data)
                 label=label.to(self._device)
 
-                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIPall, perturb_var=0)
+                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.SIP, perturb_var=0)
                 prompt_list.append(prompt.detach().cpu())
 
         if mode == 'new':
-            self._network.backbone.Avg_TSP = self.args["EMA_beta"]*self._network.backbone.Avg_TSP + (1-self.args["EMA_beta"])*torch.mean(torch.cat(prompt_list, dim=0), dim=0) 
+            self._network.backbone.Avg_SSP = self.args["EMA_beta"]*self._network.backbone.Avg_SSP + (1-self.args["EMA_beta"])*torch.mean(torch.cat(prompt_list, dim=0), dim=0) 
         else:
-            self._network.backbone.Avg_TSP = torch.mean(torch.cat(prompt_list, dim=0), dim=0) 
+            self._network.backbone.Avg_SSP = torch.mean(torch.cat(prompt_list, dim=0), dim=0) 
 
-        self._network.backbone.Avg_TSP.to(self._device)   
-
+        self._network.backbone.Avg_SSP.to(self._device)   
 
 
     def find_anchor_sample(self, model, train_loader):
@@ -300,13 +299,13 @@ class Learner(BaseLearner):
                 embedding_list.append(embedding.cpu())
                 label_list.append(label.cpu())
 
-                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.TIPall, perturb_var=0)
+                prompt, _ = self._network.backbone.Prompt_Encoder(fea_data, self._network.backbone.SIP, perturb_var=0)
                 prompt_list.append(prompt.detach().cpu())
 
         embedding_list = torch.cat(embedding_list, dim=0)
         label_list = torch.cat(label_list, dim=0)
-        self._network.backbone.Avg_TSP = torch.mean(torch.cat(prompt_list, dim=0), dim=0)   
-        self._network.backbone.Avg_TSP.to(self._device)   
+        self._network.backbone.Avg_SSP = torch.mean(torch.cat(prompt_list, dim=0), dim=0)   
+        self._network.backbone.Avg_SSP.to(self._device)   
 
         class_list=np.unique(train_loader.dataset.labels)
         anchor_sample = []

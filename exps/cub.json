@@ -33,6 +33,6 @@
 
     "kl_weight": 0.001,
     "anchor_lambda": 0.1,
-    "method_id": "gsecp"
+    "method_id": "gsecp_new_with_sigmoid_gate_with_prompt_norm"
 }
 

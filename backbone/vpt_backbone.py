@@ -91,14 +91,14 @@ class VPT_ViT(VisionTransformer):
                 round(args["init_cls"] * self.args["prompt_pool_num"]), 
                 Prompt_Token_num / 2
             )
-            self.TSP_sec = DPrompt(
+            self.TSP = DPrompt(
                 args, 
                 embed_dim, 
                 args["nb_tasks"] - 1,
                 Prompt_Token_num / 2
             )
-            self.register_buffer("TIPall",torch.zeros(depth, int(Prompt_Token_num/2), embed_dim))
-            self.Avg_TSP = torch.zeros(depth, int(Prompt_Token_num/2), embed_dim)  
+            self.register_buffer("SIP",torch.zeros(depth, int(Prompt_Token_num/2), embed_dim))
+            self.Avg_SSP = torch.zeros(depth, int(Prompt_Token_num/2), embed_dim)  
             self.Prompt_Encoder = PROMPT_Encoder(
                 args, 
                 depth, 
@@ -111,7 +111,7 @@ class VPT_ViT(VisionTransformer):
                 batch_first=True
             )
             self.gate = torch.nn.Parameter(torch.ones(depth) * 0.1)
-            self.beta_TIPall = nn.Parameter(
+            self.beta_SIP = nn.Parameter(
                 torch.ones(depth) * torch.log(torch.tensor(0.8/(1-0.8)))
             )
 
@@ -123,13 +123,13 @@ class VPT_ViT(VisionTransformer):
                 20, 
                 Prompt_Token_num / 2
             )
-            self.TSP_sec = DPrompt(
+            self.TSP = DPrompt(
                 embed_dim,
                 num_classes / 2,
                 Prompt_Token_num / 2
             )
-            self.register_buffer("TIPall",torch.zeros(1, int(Prompt_Token_num/2), embed_dim))
-            self.Avg_TSP = torch.zeros(1, int(Prompt_Token_num/2), embed_dim) 
+            self.register_buffer("SIP",torch.zeros(1, int(Prompt_Token_num/2), embed_dim))
+            self.Avg_SSP = torch.zeros(1, int(Prompt_Token_num/2), embed_dim) 
             self.Prompt_Encoder = PROMPT_Encoder(
                 args, 
                 1, 
@@ -154,12 +154,12 @@ class VPT_ViT(VisionTransformer):
                 param.requires_grad = True
             for param in self.TIP.parameters():
                 param.requires_grad = True
-            for param in self.TSP_sec.parameters():
+            for param in self.TSP.parameters():
                 param.requires_grad = True
             for param in self.cross_attn.parameters():
                 param.requires_grad = True
             self.gate.requires_grad = True
-            self.beta_TIPall.requires_grad = True
+            self.beta_SIP.requires_grad = True
         except:
             pass
 
@@ -173,7 +173,7 @@ class VPT_ViT(VisionTransformer):
                 param.requires_grad = True
             for param in self.Prompt_Encoder.fc_std.parameters():
                 param.requires_grad = True
-            for param in self.TSP_sec.parameters():
+            for param in self.TSP.parameters():
                 param.requires_grad = True
             for param in self.cross_attn.parameters():
                 param.requires_grad = True
@@ -187,11 +187,11 @@ class VPT_ViT(VisionTransformer):
     def load_prompt(self, prompt_state_dict):
         pass
 
-    def forward_features(self,x,perturb_var=0,update_TIPall=False):
+    def forward_features(self,x,perturb_var=0,update_SIP=False):
         x_raw = x
 
         fea_x = self.Prompt_Encoder.prompt_backbone(x_raw)
-        tsp, kl = self.Prompt_Encoder(fea_x, self.TIPall, perturb_var) 
+        ssp, kl = self.Prompt_Encoder(fea_x, self.SIP, perturb_var) 
 
         x = self.patch_embed(x)
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)
@@ -205,22 +205,23 @@ class VPT_ViT(VisionTransformer):
                 x_query = x[:, 0, :]
                 TIP = self.TIP.forward(x_query, i)
 
-                # 只在base阶段更新TIPall
-                if update_TIPall:
-                    beta_TIPall = torch.sigmoid(self.beta_TIPall[i])
-                    self.TIPall[i] = beta_TIPall * self.TIPall[i] + \
-                                    (1-beta_TIPall) * TIP.mean(0).detach()
+                # 只在base阶段更新SIP
+                if update_SIP:
+                    beta_SIP = torch.sigmoid(self.beta_SIP[i])
+                    self.SIP[i] = beta_SIP * self.SIP[i] + \
+                                    (1-beta_SIP) * TIP.mean(0).detach()
 
-                TSP = self.args["avg_alpha"] * self.Avg_TSP[i].expand(x.shape[0], -1, -1).to(x.device) + \
-                    (1-self.args["avg_alpha"]) * tsp[:,i,:,:]
+                SSP = self.args["avg_alpha"] * self.Avg_SSP[i].expand(x.shape[0], -1, -1).to(x.device) + \
+                    (1-self.args["avg_alpha"]) * ssp[:,i,:,:]
+                
                 q = x_query.unsqueeze(1)     # (bs,1,D)
-                attn_out, _ = self.cross_attn(q, TSP, TSP)
+                attn_out, _ = self.cross_attn(q, SSP, SSP)
                 x_query = x_query + self.gate[i] * attn_out.squeeze(1)
                 if not torch.isfinite(x_query).all():
                     print("x_query contains NaN or Inf")
-                TSP_sec = self.TSP_sec.forward(x_query, i)
-                
-                Prompt_Tokens = torch.cat([TIP, TSP_sec], dim=1)
+                TSP = self.TSP.forward(x_query, i)
+
+                Prompt_Tokens = torch.cat([TIP, TSP], dim=1)
                 x = torch.cat([x, Prompt_Tokens], dim=1)
                 x = self.blocks[i](x)[:, :num_tokens]   
         else:  # self.VPT_type == "Shallow"
@@ -229,8 +230,8 @@ class VPT_ViT(VisionTransformer):
         x = self.norm(x)
         return x, kl
 
-    def forward(self, x, perturb_var=0, update_TIPall=False):
-        x, kl = self.forward_features(x, perturb_var=perturb_var, update_TIPall=update_TIPall)
+    def forward(self, x, perturb_var=0, update_SIP=False):
+        x, kl = self.forward_features(x, perturb_var=perturb_var, update_SIP=update_SIP)
         x = x[:, 0, :]
         return x, kl
 
@@ -262,8 +263,8 @@ class SimpleVitNet(BaseNet):
         x, kl=self.backbone(x)
         return x
 
-    def forward(self, x, perturb_var=0, update_TIPall=False):
-        x, kl = self.backbone(x, perturb_var=perturb_var, update_TIPall=update_TIPall)
+    def forward(self, x, perturb_var=0, update_SIP=False):
+        x, kl = self.backbone(x, perturb_var=perturb_var, update_SIP=update_SIP)
 
         out = self.fc(x)
         out.update({"features": x})
